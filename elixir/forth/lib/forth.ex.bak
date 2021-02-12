@@ -1,0 +1,110 @@
+defmodule Forth do
+  defguard is_operator(x) when x in ["+", "-", "*", "/"]
+  @opaque evaluator :: any
+
+  @doc """
+  Create a new evaluator.
+  """
+  @spec new() :: evaluator
+  def new() do
+    {[], %{}}
+  end
+
+  @doc """
+  Evaluate an input string, updating the evaluator state.
+  """
+  @spec eval(evaluator, String.t()) :: evaluator
+  def eval({stack, words}, s) when is_binary(s) do
+    {stack, words, _} =
+      s
+      |> String.split(~r/[^\w\+\-\*\/:;]/u)
+      |> Enum.reduce({stack, words, nil}, fn token, {stack_acc, words_acc, context} ->
+        token = token |> String.downcase()
+
+        cond do
+          token === ":" ->
+            {stack_acc, words_acc, :word_def}
+
+          token === ";" ->
+            {stack_acc,
+             Map.update(words_acc, context, [], &(&1 |> Enum.reverse() |> Enum.join(" "))), nil}
+
+          context === :word_def ->
+            if token =~ ~r/^[[:digit:]]+$/, do: raise(Forth.InvalidWord, word: token)
+            {stack_acc, Map.put(words_acc, token, []), token}
+
+          is_binary(context) ->
+            {stack_acc, Map.update(words_acc, context, [], &[token | &1]), context}
+
+          token =~ ~r/^[[:digit:]]+$/ ->
+            {[String.to_integer(token) | stack_acc], words_acc, context}
+
+          true ->
+            case Map.fetch(words, token) do
+              {:ok, definition} ->
+                {stack, words} = eval({stack_acc, words_acc}, definition)
+                {stack, words, context}
+
+              :error ->
+                {eval_token(token, stack_acc, words_acc), words_acc, context}
+            end
+        end
+      end)
+
+    {stack, words}
+  end
+
+  defp eval_token(token, stack, _) when is_operator(token) and length(stack) < 2,
+    do: raise(Forth.StackUnderflow)
+
+  defp eval_token(token, [x, y | stack], _) when is_operator(token) do
+    try do
+      Code.eval_string("trunc(a #{token} b)", a: y, b: x)
+    rescue
+      ArithmeticError -> raise Forth.DivisionByZero
+    else
+      {result, _} -> [result | stack]
+    end
+  end
+
+  defp eval_token("dup", [], _), do: raise(Forth.StackUnderflow)
+  defp eval_token("dup", [x | stack], _), do: [x, x | stack]
+  defp eval_token("drop", [], _), do: raise(Forth.StackUnderflow)
+  defp eval_token("drop", [_ | stack], _), do: stack
+  defp eval_token("swap", stack, _) when length(stack) < 2, do: raise(Forth.StackUnderflow)
+  defp eval_token("swap", [x, y | stack], _), do: [y, x | stack]
+  defp eval_token("over", stack, _) when length(stack) < 2, do: raise(Forth.StackUnderflow)
+  defp eval_token("over", [x, y | stack], _), do: [y, x, y | stack]
+  defp eval_token(token, _, _), do: raise(Forth.UnknownWord, word: token)
+
+  @doc """
+  Return the current stack as a string with the element on top of the stack
+  being the rightmost element in the string.
+  """
+  @spec format_stack(evaluator) :: String.t()
+  def format_stack({stack, _}) do
+    stack
+    |> Enum.reverse()
+    |> Enum.join(" ")
+  end
+
+  defmodule StackUnderflow do
+    defexception []
+    def message(_), do: "stack underflow"
+  end
+
+  defmodule InvalidWord do
+    defexception word: nil
+    def message(e), do: "invalid word: #{inspect(e.word)}"
+  end
+
+  defmodule UnknownWord do
+    defexception word: nil
+    def message(e), do: "unknown word: #{inspect(e.word)}"
+  end
+
+  defmodule DivisionByZero do
+    defexception []
+    def message(_), do: "division by zero"
+  end
+end

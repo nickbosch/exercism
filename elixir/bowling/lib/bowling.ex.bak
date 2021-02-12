@@ -1,0 +1,56 @@
+defmodule Bowling do
+  @doc """
+    Creates a new game of bowling that can be used to store the results of
+    the game
+  """
+  @spec start() :: any
+  # {frame number, ball number, pins reamining, scores}
+  def start, do: {0, 0, 10, []}
+
+  @doc """
+    Records the number of pins knocked down on a single roll. Returns `any`
+    unless there is something wrong with the given number of pins, in which
+    case it returns a helpful message.
+  """
+  @spec roll(any, integer) :: any | String.t()
+
+  # error handling
+  def roll(_, roll) when roll < 0, do: {:error, "Negative roll is invalid"}
+  def roll({10, _, _, _}, _), do: {:error, "Cannot roll after game is over"}
+
+  def roll({_, _, pins, _}, roll) when roll > pins,
+    do: {:error, "Pin count exceeds pins on the lane"}
+
+  # spare in last frame
+  def roll({9, 1, pins, rolls}, roll) when pins == roll, do: {:spare, 2, 10, [roll | rolls]}
+  def roll({:spare, 2, pins, rolls}, roll), do: {10, 2, pins - roll, [roll | rolls]}
+
+  # strike in last frame
+  def roll({9, 0, 10, rolls}, 10), do: {:strike, 1, 10, [10 | rolls]}
+  def roll({:strike, 1, 10, rolls}, 10), do: {:strike, 2, 10, [10 | rolls]}
+  def roll({:strike, 1, 10, rolls}, roll), do: {:strike, 2, 10 - roll, [roll | rolls]}
+  def roll({:strike, 2, pins, rolls}, roll), do: {10, 2, pins - roll, [roll | rolls]}
+
+  # strike
+  def roll({frame, 0, 10, rolls}, 10), do: {frame + 1, 0, 10, [10 | rolls]}
+
+  # continue
+  def roll({frame, 0, 10, rolls}, roll), do: {frame, 1, 10 - roll, [roll | rolls]}
+
+  # open / spare
+  def roll({frame, 1, _, rolls}, roll), do: {frame + 1, 0, 10, [roll | rolls]}
+
+  @doc """
+    Returns the score of a given game of bowling if the game is complete.
+    If the game isn't complete, it returns a helpful message.
+  """
+  @spec score(any) :: integer | String.t()
+  def score({10, _, _, rolls}), do: rolls |> Enum.reverse() |> score(0)
+  def score(_), do: {:error, "Score cannot be taken until the end of the game"}
+
+  defp score([], acc), do: acc
+  defp score([x, y, z], acc) when x == 10 or x + y == 10, do: acc + x + y + z
+  defp score([x, y, z | rolls], acc) when x == 10, do: score([y, z | rolls], acc + x + y + z)
+  defp score([x, y, z | rolls], acc) when x + y == 10, do: score([z | rolls], acc + 10 + z)
+  defp score([x, y | rolls], acc) when x + y < 10, do: score(rolls, acc + x + y)
+end
