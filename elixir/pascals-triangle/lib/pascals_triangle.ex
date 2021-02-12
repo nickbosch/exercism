@@ -10,10 +10,10 @@ defmodule PascalsTriangle do
     prev = rows(num - 1)
 
     curr =
-      List.last(prev)
+      [0 | List.last(prev)]
       |> Enum.chunk_every(2, 1)
       |> Enum.map(&Enum.sum/1)
 
-    prev ++ [[1] ++ curr]
+    prev ++ [curr]
   end
 end
