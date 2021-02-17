@@ -4,16 +4,18 @@ defmodule PascalsTriangle do
   with the given height
   """
   @spec rows(integer) :: [[integer]]
-  def rows(1), do: [[1]]
+  def rows(num), do: pascals(num) |> Enum.reverse()
 
-  def rows(num) do
-    prev = rows(num - 1)
+  defp pascals(1), do: [[1]]
 
-    curr =
-      [0 | List.last(prev)]
+  defp pascals(num) do
+    all = [prev | _] = pascals(num - 1)
+
+    [
+      [0 | prev]
       |> Enum.chunk_every(2, 1)
       |> Enum.map(&Enum.sum/1)
-
-    prev ++ [curr]
+      | all
+    ]
   end
 end
